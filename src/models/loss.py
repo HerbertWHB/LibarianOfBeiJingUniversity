@@ -5,6 +5,7 @@ This includes: LossComputeBase and the standard NMTLossCompute, and
                sharded loss compute stuff.
 """
 from __future__ import division
+from tkinter import Label
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +19,6 @@ def abs_loss(generator, symbols, vocab_size, device, train=True, label_smoothing
         label_smoothing=label_smoothing if train else 0.0)
     compute.to(device)
     return compute
-
 
 
 class LossComputeBase(nn.Module):
@@ -45,8 +45,6 @@ class LossComputeBase(nn.Module):
         super(LossComputeBase, self).__init__()
         self.generator = generator
         self.padding_idx = pad_id
-
-
 
     def _make_shard_state(self, batch, output,  attns=None):
         """
@@ -95,7 +93,8 @@ class LossComputeBase(nn.Module):
         return batch_stats
 
     def sharded_compute_loss(self, batch, output,
-                              shard_size,
+                             mono_output,
+                             shard_size,
                              normalization):
         """Compute the forward loss and backpropagate.  Computation is done
         with shards and optionally truncation for memory efficiency.
@@ -151,6 +150,7 @@ class LossComputeBase(nn.Module):
                           .item()
         num_non_padding = non_padding.sum().item()
         return Statistics(loss.item(), num_non_padding, num_correct)
+    # size
 
     def _bottle(self, _v):
         return _v.view(-1, _v.size(2))
@@ -165,6 +165,7 @@ class LabelSmoothingLoss(nn.Module):
     KL-divergence between q_{smoothed ground truth prob.}(w)
     and p_{prob. computed by model}(w) is minimized.
     """
+
     def __init__(self, label_smoothing, tgt_vocab_size, ignore_index=-100):
         assert 0.0 < label_smoothing <= 1.0
         self.padding_idx = ignore_index
@@ -184,8 +185,60 @@ class LabelSmoothingLoss(nn.Module):
         model_prob = self.one_hot.repeat(target.size(0), 1)
         model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
         model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
-
+        """
+        F.kl_div 一个参数传入的是一个对数概率矩阵，第二个参数传入的是概率矩阵。
+        """
         return F.kl_div(output, model_prob, reduction='sum')
+
+
+class Similarity(nn.Module):
+    """
+    Dot product or cosine similarity
+    """
+
+    def __init__(self, temp):
+        super().__init__()
+        self.temp = temp
+        self.cos = nn.CosineSimilarity(dim=-1)
+
+    def forward(self, x, y):
+        return self.cos(x, y) / self.temp
+
+
+class LabelSmoothingLossCon(nn.Module):
+    """
+    With label smoothing,
+    KL-divergence between q_{smoothed ground truth prob.}(w)
+    and p_{prob. computed by model}(w) is minimized.
+    """
+
+    def __init__(self, label_smoothing, tgt_vocab_size, ignore_index=-100):
+        assert 0.0 < label_smoothing <= 1.0
+        self.padding_idx = ignore_index
+        super(LabelSmoothingLoss, self).__init__()
+
+        smoothing_value = label_smoothing / (tgt_vocab_size - 2)
+        one_hot = torch.full((tgt_vocab_size,), smoothing_value)
+        one_hot[self.padding_idx] = 0
+        self.register_buffer('one_hot', one_hot.unsqueeze(0))
+        self.confidence = 1.0 - label_smoothing
+
+    def forward(self, output, mono_output, target):
+        """
+        output (FloatTensor): batch_size x n_classes
+        target (LongTensor): batch_size
+        """
+        model_prob = self.one_hot.repeat(target.size(0), 1)
+        model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
+        model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
+
+        sim = Similarity(temp=0.05)
+        cos_sim = sim(output, mono_output)
+
+        labels = torch.arange(cos_sim.size(0)).long().to()
+        loss_fct = nn.CrossEntropyLoss()
+
+        return loss_fct(cos_sim, labels)
 
 
 class NMTLossCompute(LossComputeBase):
@@ -201,6 +254,9 @@ class NMTLossCompute(LossComputeBase):
             self.criterion = LabelSmoothingLoss(
                 label_smoothing, vocab_size, ignore_index=self.padding_idx
             )
+            self.criterionCon = LabelSmoothingLossCon(
+                label_smoothing, vocab_size, ignore_index=self.padding_idx
+            )
         else:
             self.criterion = nn.NLLLoss(
                 ignore_index=self.padding_idx, reduction='sum'
@@ -209,18 +265,22 @@ class NMTLossCompute(LossComputeBase):
     def _make_shard_state(self, batch, output):
         return {
             "output": output,
-            "target": batch.tgt[:,1:],
+            "target": batch.tgt[:, 1:],
         }
 
-    def _compute_loss(self, batch, output, target):
+    def _compute_loss(self, batch, output, mono_output, target):
         bottled_output = self._bottle(output)
+        bottled_mono_output = self._bottle(mono_output)
+
         scores = self.generator(bottled_output)
-        gtruth =target.contiguous().view(-1)
+        scores_mono = self.generator(bottled_mono_output)
+        gtruth = target.contiguous().view(-1)
 
         loss = self.criterion(scores, gtruth)
+        lossContrative = self.criterionCon(scores, scores_mono, gtruth)
 
         stats = self._stats(loss.clone(), scores, gtruth)
-
+        loss = loss+lossContrative
         return loss, stats
 
 
