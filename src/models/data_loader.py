@@ -47,10 +47,9 @@ class Batch(object):
             else:
                 tgt_segs = None
 
-            mask_src = ~ (src == 0)
-            mask_tgt = ~ (tgt == 0)
-            #mask_src = 1 - (src == 0)
-            #mask_tgt = 1 - (tgt == 0)
+
+            mask_src = 1 - (src == 0)
+            mask_tgt = 1 - (tgt == 0)
             # for bart, deprecated
             mask_src[:, 0] = 1
             # mask_tgt[:, 0] = 1
@@ -59,8 +58,7 @@ class Batch(object):
 
             src_sent_labels = torch.tensor(self._pad(pre_src_sent_labels, 0))
 
-            mask_cls = ~ (clss == -1)
-            #mask_cls = 1 - (clss == -1)
+            mask_cls = 1 - (clss == -1)
             clss[clss == -1] = 0
             setattr(self, 'clss', clss.to(device))
             setattr(self, 'mask_cls', mask_cls.to(device))
