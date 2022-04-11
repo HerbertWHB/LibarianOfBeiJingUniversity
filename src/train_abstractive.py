@@ -314,10 +314,10 @@ def train_abs(args, device_id):
 
 def train_abs_single(args, device_id):
     init_logger(args.log_file)
-    logger.info(str(args))
+    # logger.info(str(args))
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
-    logger.info('Device ID %d' % device_id)
-    logger.info('Device %s' % device)
+    #logger.info('Device ID %d' % device_id)
+    #logger.info('Device %s' % device)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
@@ -361,7 +361,7 @@ def train_abs_single(args, device_id):
     else:
         optim = [model_builder.build_optim(args, model, checkpoint)]
 
-    logger.info(model)
+    # logger.info(model)
 
     if args.bart:
         tokenizer = AutoTokenizer.from_pretrained(

@@ -5,6 +5,8 @@ This includes: LossComputeBase and the standard NMTLossCompute, and
                sharded loss compute stuff.
 """
 from __future__ import division
+from ast import Index
+from operator import index
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +20,6 @@ def abs_loss(generator, symbols, vocab_size, device, train=True, label_smoothing
         label_smoothing=label_smoothing if train else 0.0)
     compute.to(device)
     return compute
-
 
 
 class LossComputeBase(nn.Module):
@@ -45,8 +46,6 @@ class LossComputeBase(nn.Module):
         super(LossComputeBase, self).__init__()
         self.generator = generator
         self.padding_idx = pad_id
-
-
 
     def _make_shard_state(self, batch, output,  attns=None):
         """
@@ -95,7 +94,7 @@ class LossComputeBase(nn.Module):
         return batch_stats
 
     def sharded_compute_loss(self, batch, output,
-                              shard_size,
+                             shard_size,
                              normalization):
         """Compute the forward loss and backpropagate.  Computation is done
         with shards and optionally truncation for memory efficiency.
@@ -153,7 +152,8 @@ class LossComputeBase(nn.Module):
         return Statistics(loss.item(), num_non_padding, num_correct)
 
     def _bottle(self, _v):
-        return _v.view(-1, _v.size(2))
+        # return _v.view(-1, _v.size(2))
+        return _v.reshape(-1, _v.size(2))
 
     def _unbottle(self, _v, batch_size):
         return _v.view(-1, batch_size, _v.size(1))
@@ -165,6 +165,7 @@ class LabelSmoothingLoss(nn.Module):
     KL-divergence between q_{smoothed ground truth prob.}(w)
     and p_{prob. computed by model}(w) is minimized.
     """
+
     def __init__(self, label_smoothing, tgt_vocab_size, ignore_index=-100):
         assert 0.0 < label_smoothing <= 1.0
         self.padding_idx = ignore_index
@@ -209,18 +210,29 @@ class NMTLossCompute(LossComputeBase):
     def _make_shard_state(self, batch, output):
         return {
             "output": output,
-            "target": batch.tgt[:,1:],
+            "target": batch.tgt[:, 1:],
         }
 
     def _compute_loss(self, batch, output, target):
-        bottled_output = self._bottle(output)
-        scores = self.generator(bottled_output)
-        gtruth =target.contiguous().view(-1)
+        index = output.size(1)//2
+        mono_output = output[:, index:, :]
+        monoTarget = target[:, index:]
 
+        halfOutput = output[:, :index, :]
+        halfTarget = target[:, :index]
+
+        # MCLAS自己的LOSS计算
+        bottled_output = self._bottle(halfOutput)
+        scores = self.generator(bottled_output)
+        gtruth = halfTarget.contiguous().view(-1)
         loss = self.criterion(scores, gtruth)
+        # END
+
+        # contractive learning
+        bottled_MonoOutput = self._bottle(mono_output)
+        # END
 
         stats = self._stats(loss.clone(), scores, gtruth)
-
         return loss, stats
 
 

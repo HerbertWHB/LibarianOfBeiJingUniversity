@@ -10,12 +10,13 @@ from others.logging import logger
 from others.utils import test_rouge, rouge_results_to_str
 from transformers import BertTokenizer
 
+
 def _tally_parameters(model):
     n_params = sum([p.nelement() for p in model.parameters()])
     return n_params
 
 
-def build_trainer(args, device_id, model, optims,loss):
+def build_trainer(args, device_id, model, optims, loss):
     """
     Simplify `Trainer` creation based on user `opt`s*
     Args:
@@ -29,7 +30,6 @@ def build_trainer(args, device_id, model, optims,loss):
             used to save the model
     """
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
-
 
     grad_accum_count = args.accum_count
     n_gpu = args.world_size
@@ -46,10 +46,11 @@ def build_trainer(args, device_id, model, optims,loss):
 
     writer = SummaryWriter(tensorboard_log_dir, comment="Unmt")
 
-    report_manager = ReportMgr(args.report_every, start_time=-1, tensorboard_writer=writer)
+    report_manager = ReportMgr(
+        args.report_every, start_time=-1, tensorboard_writer=writer)
 
-
-    trainer = Trainer(args, model, optims, loss, grad_accum_count, n_gpu, gpu_rank, report_manager)
+    trainer = Trainer(args, model, optims, loss,
+                      grad_accum_count, n_gpu, gpu_rank, report_manager)
 
     # print(tr)
     if (model):
@@ -85,8 +86,8 @@ class Trainer(object):
     """
 
     def __init__(self,  args, model,  optims, loss,
-                  grad_accum_count=1, n_gpu=1, gpu_rank=1,
-                  report_manager=None):
+                 grad_accum_count=1, n_gpu=1, gpu_rank=1,
+                 report_manager=None):
         # Basic attributes.
         self.args = args
         self.save_checkpoint_steps = args.save_checkpoint_steps
@@ -125,7 +126,7 @@ class Trainer(object):
         logger.info('Start training...')
 
         # step =  self.optim._step + 1
-        step =  self.optims[0]._step + 1
+        step = self.optims[0]._step + 1
 
         true_batchs = []
         accum = 0
@@ -143,7 +144,8 @@ class Trainer(object):
                 if self.n_gpu == 0 or (i % self.n_gpu == self.gpu_rank):
 
                     true_batchs.append(batch)
-                    num_tokens = batch.tgt[:, 1:].ne(self.loss.padding_idx).sum()
+                    num_tokens = batch.tgt[:, 1:].ne(
+                        self.loss.padding_idx).sum()
                     normalization += num_tokens.item()
                     accum += 1
                     if accum == self.grad_accum_count:
@@ -203,8 +205,8 @@ class Trainer(object):
                 mask_tgt = batch.mask_tgt
                 mask_cls = batch.mask_cls
 
-                outputs, _ , _= self.model(src, tgt,segs, clss, mask_src, mask_tgt, mask_cls, tgt_eng=tgt_eng, tgt_segs=tgt_segs)
-
+                outputs, _, _ = self.model(
+                    src, tgt, segs, clss, mask_src, mask_tgt, mask_cls, tgt_eng=tgt_eng, tgt_segs=tgt_segs)
 
                 batch_stats = self.loss.monolithic_compute_loss(batch, outputs)
                 stats.update(batch_stats)
@@ -228,10 +230,11 @@ class Trainer(object):
             tgt_segs = batch.tgt_segs
             print("tgt_seg", tgt_segs.size())
         print("src = ", tokenizer.convert_ids_to_tokens(batch.src[0].tolist()))
-        print("tgt txt = ", tokenizer.convert_ids_to_tokens(batch.tgt[0].tolist()))
-        print("tgt eng txt = ", tokenizer.convert_ids_to_tokens(batch.tgt_eng[0].tolist()))
+        print("tgt txt = ", tokenizer.convert_ids_to_tokens(
+            batch.tgt[0].tolist()))
+        print("tgt eng txt = ", tokenizer.convert_ids_to_tokens(
+            batch.tgt_eng[0].tolist()))
         print("tgt eng ")
-
 
     def _gradient_accumulation(self, true_batchs, normalization, total_stats,
                                report_stats):
@@ -242,14 +245,10 @@ class Trainer(object):
             if self.grad_accum_count == 1:
                 self.model.zero_grad()
 
-
-
-
             src = batch.src
             tgt = batch.tgt
             segs = batch.segs
             clss = batch.clss
-
 
             tgt_eng = batch.tgt_eng
             # tgt_segs idea has been deprecated
@@ -264,17 +263,17 @@ class Trainer(object):
             mask_tgt = batch.mask_tgt
             mask_cls = batch.mask_cls
 
-            outputs, scores, mono_outputs = self.model(src, tgt,segs, clss, mask_src, mask_tgt, mask_cls, tgt_eng=tgt_eng, tgt_segs=tgt_segs)
-
+            outputs, scores, mono_outputs = self.model(
+                src, tgt, segs, clss, mask_src, mask_tgt, mask_cls, tgt_eng=tgt_eng, tgt_segs=tgt_segs)
             # 如果是有两种语言的话，那直接把输出跟目标拼在一块儿得了，非常简单。
             # calculate the multi-task loss, concatenate monolingual outputs and cross-lingual outputs
             if self.args.multi_task:
                 # Here labels are concatenated from the second token (the first cls token is not included).
+                # 这里的tgt是什么用的我没有看懂
                 batch.tgt = torch.cat((tgt, tgt_eng[:, 1:]), dim=1)
                 outputs = torch.cat((outputs, mono_outputs), dim=1)
-
-            batch_stats = self.loss.sharded_compute_loss(batch, outputs, self.args.generator_shard_size, normalization)
-
+            batch_stats = self.loss.sharded_compute_loss(
+                batch, outputs, self.args.generator_shard_size, normalization)
             batch_stats.n_docs = int(src.size(0))
 
             total_stats.update(batch_stats)
@@ -305,7 +304,6 @@ class Trainer(object):
             for o in self.optims:
                 o.step()
 
-
     def test(self, test_iter, step, cal_lead=False, cal_oracle=False):
         """ Validate model.
             valid_iter: validate data iterator
@@ -325,7 +323,7 @@ class Trainer(object):
             tri_c = _get_ngrams(3, c.split())
             for s in p:
                 tri_s = _get_ngrams(3, s.split())
-                if len(tri_c.intersection(tri_s))>0:
+                if len(tri_c.intersection(tri_s)) > 0:
                     return True
             return False
 
@@ -333,7 +331,7 @@ class Trainer(object):
             self.model.eval()
         stats = Statistics()
 
-        can_path = '%s_step%d.candidate'%(self.args.result_path,step)
+        can_path = '%s_step%d.candidate' % (self.args.result_path, step)
         gold_path = '%s_step%d.gold' % (self.args.result_path, step)
         with open(can_path, 'w') as save_pred:
             with open(gold_path, 'w') as save_gold:
@@ -342,13 +340,14 @@ class Trainer(object):
                         gold = []
                         pred = []
                         if (cal_lead):
-                            selected_ids = [list(range(batch.clss.size(1)))] * batch.batch_size
+                            selected_ids = [
+                                list(range(batch.clss.size(1)))] * batch.batch_size
                         for i, idx in enumerate(selected_ids):
                             _pred = []
-                            if(len(batch.src_str[i])==0):
+                            if(len(batch.src_str[i]) == 0):
                                 continue
                             for j in selected_ids[i][:len(batch.src_str[i])]:
-                                if(j>=len( batch.src_str[i])):
+                                if(j >= len(batch.src_str[i])):
                                     continue
                                 candidate = batch.src_str[i][j].strip()
                                 _pred.append(candidate)
@@ -358,7 +357,8 @@ class Trainer(object):
 
                             _pred = '<q>'.join(_pred)
                             if(self.args.recall_eval):
-                                _pred = ' '.join(_pred.split()[:len(batch.tgt_str[i].split())])
+                                _pred = ' '.join(
+                                    _pred.split()[:len(batch.tgt_str[i].split())])
 
                             pred.append(_pred)
                             gold.append(batch.tgt_str[i])
@@ -367,9 +367,10 @@ class Trainer(object):
                             save_gold.write(gold[i].strip()+'\n')
                         for i in range(len(pred)):
                             save_pred.write(pred[i].strip()+'\n')
-        if(step!=-1 and self.args.report_rouge):
+        if(step != -1 and self.args.report_rouge):
             rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
-            logger.info('Rouges at step %d \n%s' % (step, rouge_results_to_str(rouges)))
+            logger.info('Rouges at step %d \n%s' %
+                        (step, rouge_results_to_str(rouges)))
         self._report_step(0, step, valid_stats=stats)
 
         return stats
@@ -388,7 +389,8 @@ class Trainer(object):
             'opt': self.args,
             'optims': self.optims,
         }
-        checkpoint_path = os.path.join(self.args.model_path, 'model_step_%d.pt' % step)
+        checkpoint_path = os.path.join(
+            self.args.model_path, 'model_step_%d.pt' % step)
         logger.info("Saving checkpoint %s" % checkpoint_path)
         # checkpoint_path = '%s_step_%d.pt' % (FLAGS.model_path, step)
         if (not os.path.exists(checkpoint_path)):
