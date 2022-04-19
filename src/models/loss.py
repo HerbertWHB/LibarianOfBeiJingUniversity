@@ -189,6 +189,65 @@ class LabelSmoothingLoss(nn.Module):
         return F.kl_div(output, model_prob, reduction='sum')
 
 
+class monoLabelSmoothingLoss(nn.Module):
+    """
+    With label smoothing,
+    KL-divergence between q_{smoothed ground truth prob.}(w)
+    and p_{prob. computed by model}(w) is minimized.
+    """
+
+    def __init__(self, label_smoothing, tgt_vocab_size, ignore_index=-100):
+        assert 0.0 < label_smoothing <= 1.0
+        self.padding_idx = ignore_index
+        super(monoLabelSmoothingLoss, self).__init__()
+
+        smoothing_value = label_smoothing / (tgt_vocab_size - 2)
+        one_hot = torch.full((tgt_vocab_size,), smoothing_value)
+        one_hot[self.padding_idx] = 0
+        self.register_buffer('one_hot', one_hot.unsqueeze(0))
+        self.confidence = 1.0 - label_smoothing
+
+    def forward(self, output, mono_outputs, target):
+        """
+        output (FloatTensor): batch_size x n_classes
+        target (LongTensor): batch_size
+        """
+        #
+        # model_prob = self.one_hot.repeat(target.size(0), 1)
+        # model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
+        # model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
+
+        sim = Similarity(temp=0.05)
+        cos_sim = sim(output.unsqueeze(1), mono_outputs.unsqueeze(0))
+
+        labels = torch.arange(cos_sim.size(0)).long().to('cuda:0')
+
+        # 升+看数据
+        # input 看看有没有diff
+        # print('---------------------------\n')
+        # print('output.unseq(1)=%s\n', output.unsqueeze(1))
+        # print('---------------------------\n')
+
+        # parmas  input target
+        loss_fct = nn.CrossEntropyLoss()
+
+        return loss_fct(cos_sim, labels)
+
+
+class Similarity(nn.Module):
+    """
+    Dot product or cosine similarity
+    """
+
+    def __init__(self, temp):
+        super().__init__()
+        self.temp = temp
+        self.cos = nn.CosineSimilarity(dim=-1)
+
+    def forward(self, x, y):
+        return self.cos(x, y) / self.temp
+
+
 class NMTLossCompute(LossComputeBase):
     """
     Standard NMT Loss Computation.
@@ -200,6 +259,9 @@ class NMTLossCompute(LossComputeBase):
         self.sparse = not isinstance(generator[1], nn.LogSoftmax)
         if label_smoothing > 0:
             self.criterion = LabelSmoothingLoss(
+                label_smoothing, vocab_size, ignore_index=self.padding_idx
+            )
+            self.monocriterion = monoLabelSmoothingLoss(
                 label_smoothing, vocab_size, ignore_index=self.padding_idx
             )
         else:
@@ -228,11 +290,19 @@ class NMTLossCompute(LossComputeBase):
         loss = self.criterion(scores, gtruth)
         # END
 
-        # contractive learning
-        bottled_MonoOutput = self._bottle(mono_output)
+        # Contractive Learning
+        bottled_monoOutput = self._bottle(mono_output)
+        mono_scores = self.generator(bottled_monoOutput)
+        mono_gtruth = monoTarget.contiguous().view(-1)
+        contractive_loss = self.monocriterion(scores, mono_scores, mono_gtruth)
         # END
 
+        loss = contractive_loss+loss
         stats = self._stats(loss.clone(), scores, gtruth)
+        print('---')
+        print(stats)
+        print('---')
+        breakpoint()
         return loss, stats
 
 

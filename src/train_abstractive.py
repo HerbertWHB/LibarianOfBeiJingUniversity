@@ -127,6 +127,7 @@ def validate_abs(args, device_id):
         cp_files.sort(key=os.path.getmtime)
         xent_lst = []
         for i, cp in enumerate(cp_files):
+            # print('--'*10+'cp='+cp)
             step = int(cp.split('.')[-2].split('_')[-1])
             if (args.test_start_from != -1 and step < args.test_start_from):
                 xent_lst.append((1e6, cp))
@@ -316,8 +317,8 @@ def train_abs_single(args, device_id):
     init_logger(args.log_file)
     # logger.info(str(args))
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
-    #logger.info('Device ID %d' % device_id)
-    #logger.info('Device %s' % device)
+    logger.info('Device ID %d' % device_id)
+    logger.info('Device %s' % device)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
