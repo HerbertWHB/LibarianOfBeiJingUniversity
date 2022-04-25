@@ -150,6 +150,7 @@ class LossComputeBase(nn.Module):
                           .item()
         num_non_padding = non_padding.sum().item()
         return Statistics(loss.item(), num_non_padding, num_correct)
+    # size
 
     def _bottle(self, _v):
         # return _v.view(-1, _v.size(2))
@@ -185,7 +186,9 @@ class LabelSmoothingLoss(nn.Module):
         model_prob = self.one_hot.repeat(target.size(0), 1)
         model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
         model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
-
+        """
+        F.kl_div 一个参数传入的是一个对数概率矩阵，第二个参数传入的是概率矩阵。
+        """
         return F.kl_div(output, model_prob, reduction='sum')
 
 
@@ -298,12 +301,6 @@ class NMTLossCompute(LossComputeBase):
 
         loss = contractive_loss+loss
         stats = self._stats(loss.clone(), scores, gtruth)
-
-        # print('---loss---')
-        # print(loss)
-        # print('------')
-        # print(stats)
-        # print('---stats---')
 
         return loss, stats
 

@@ -8,7 +8,6 @@ import torch
 from others.logging import logger
 
 
-
 class Batch(object):
     def _pad(self, data, pad_id, width=-1):
         if (width == -1):
@@ -29,7 +28,6 @@ class Batch(object):
             pre_src_sent_labels = [x[4] for x in data]
 
             pre_tgt_segs = [x[5] for x in data]
-
 
             # the monolingual language target
             pre_tgt_eng = [x[6] for x in data]
@@ -67,7 +65,6 @@ class Batch(object):
             setattr(self, 'src_sent_labels', src_sent_labels.to(device))
             # setattr(self, 'src_sent_labels', None)
 
-
             setattr(self, 'src', src.to(device))
             setattr(self, 'tgt', tgt.to(device))
             setattr(self, 'segs', segs.to(device))
@@ -76,8 +73,6 @@ class Batch(object):
             setattr(self, 'tgt_eng', tgt_eng.to(device))
             if tgt_segs is not None:
                 setattr(self, 'tgt_segs', tgt_segs.to(device))
-
-
 
             if (is_test):
                 src_str = [x[-2] for x in data]
@@ -89,8 +84,6 @@ class Batch(object):
 
     def __len__(self):
         return self.batch_size
-
-
 
 
 def load_dataset(args, corpus_type, shuffle):
@@ -112,7 +105,8 @@ def load_dataset(args, corpus_type, shuffle):
         return dataset
 
     # Sort the glob output by file name (by increasing indexes).
-    pts = sorted(glob.glob(args.bert_data_path + '.' + corpus_type + '.[0-9]*.pt'))
+    pts = sorted(glob.glob(args.bert_data_path +
+                 '.' + corpus_type + '.[0-9]*.pt'))
     # only use limited resource to train the model.
     if args.few_shot and corpus_type == 'train':
         pts = pts[:args.few_shot_rate]
@@ -133,8 +127,8 @@ def abs_batch_size_fn(new, count):
     global max_n_sents, max_n_tokens, max_size
     if count == 1:
         max_size = 0
-        max_n_sents=0
-        max_n_tokens=0
+        max_n_sents = 0
+        max_n_tokens = 0
     max_n_sents = max(max_n_sents, len(tgt))
     max_size = max(max_size, max_n_sents)
     src_elements = count * max_size
@@ -177,7 +171,6 @@ class Dataloader(object):
                 yield batch
             self.cur_iter = self._next_dataset_iterator(dataset_iter)
 
-
     def _next_dataset_iterator(self, dataset_iter):
         try:
             # Drop the current dataset for decreasing memory
@@ -191,9 +184,9 @@ class Dataloader(object):
         except StopIteration:
             return None
 
-        return DataIterator(args = self.args,
-            dataset=self.cur_dataset,  batch_size=self.batch_size,
-            device=self.device, shuffle=self.shuffle, is_test=self.is_test)
+        return DataIterator(args=self.args,
+                            dataset=self.cur_dataset,  batch_size=self.batch_size,
+                            device=self.device, shuffle=self.shuffle, is_test=self.is_test)
 
 
 class DataIterator(object):
@@ -219,11 +212,6 @@ class DataIterator(object):
         xs = self.dataset
         return xs
 
-
-
-
-
-
     def preprocess(self, ex, is_test):
         src = ex['src']
         # if train_first, set the target as the monolingual language.
@@ -234,11 +222,9 @@ class DataIterator(object):
         tgt_eng = ex['tgt_eng'][:self.args.max_tgt_len][:-1] + [2]
         src_sent_labels = ex['src_sent_labels']
 
-
-
         segs = ex['segs']
         if(not self.args.use_interval):
-            segs=[0]*len(segs)
+            segs = [0]*len(segs)
         clss = ex['clss']
         src_txt = ex['src_txt']
         tgt_txt = ex['tgt_txt']
@@ -252,19 +238,14 @@ class DataIterator(object):
         segs = segs[:self.args.max_pos]
         max_sent_id = bisect.bisect_left(clss, self.args.max_pos)
 
-
         src_sent_labels = src_sent_labels[:max_sent_id]
         # src_sent_labels = None
-
-
 
         clss = clss[:max_sent_id]
         # src_txt = src_txt[:max_sent_id]
 
-
-
         if(is_test):
-        # return src, tgt, segs, clss, src_sent_labels, tgt_segs, src_txt, tgt_txt
+            # return src, tgt, segs, clss, src_sent_labels, tgt_segs, src_txt, tgt_txt
             return src, tgt, segs, clss, src_sent_labels, tgt_segs, tgt_eng, tgt_txt_eng, src_txt, tgt_txt
         else:
             # return src, tgt, segs, clss, src_sent_labels, tgt_segs
@@ -273,7 +254,7 @@ class DataIterator(object):
     def batch_buffer(self, data, batch_size):
         minibatch, size_so_far = [], 0
         for ex in data:
-            if(len(ex['src'])==0):
+            if(len(ex['src']) == 0):
                 continue
             ex = self.preprocess(ex, self.is_test)
             if(ex is None):
@@ -285,7 +266,8 @@ class DataIterator(object):
                 minibatch, size_so_far = [], 0
             elif size_so_far > batch_size:
                 yield minibatch[:-1]
-                minibatch, size_so_far = minibatch[-1:], self.batch_size_fn(ex, 1)
+                minibatch, size_so_far = minibatch[-1:], self.batch_size_fn(
+                    ex, 1)
         if minibatch:
             yield minibatch
 
@@ -300,7 +282,8 @@ class DataIterator(object):
                 minibatch, size_so_far = [], 0
             elif size_so_far > batch_size:
                 yield minibatch[:-1]
-                minibatch, size_so_far = minibatch[-1:], self.batch_size_fn(ex, 1)
+                minibatch, size_so_far = minibatch[-1:], self.batch_size_fn(
+                    ex, 1)
         if minibatch:
             yield minibatch
 
@@ -308,7 +291,6 @@ class DataIterator(object):
         """ Create batches """
         data = self.data()
         for buffer in self.batch_buffer(data, self.batch_size * 300):
-
 
             if (self.args.task == 'abs'):
                 p_batch = sorted(buffer, key=lambda x: len(x[2]))
@@ -318,12 +300,11 @@ class DataIterator(object):
 
             p_batch = self.batch(p_batch, self.batch_size)
 
-
             p_batch = list(p_batch)
             if (self.shuffle):
                 random.shuffle(p_batch)
             for b in p_batch:
-                if(len(b)==0):
+                if(len(b) == 0):
                     continue
                 yield b
 
@@ -413,7 +394,8 @@ class TextDataloader(object):
                 minibatch, size_so_far = [], 0
             elif size_so_far > batch_size:
                 yield minibatch[:-1]
-                minibatch, size_so_far = minibatch[-1:], simple_batch_size_fn(ex, 1)
+                minibatch, size_so_far = minibatch[-1:], simple_batch_size_fn(
+                    ex, 1)
         if minibatch:
             yield minibatch
 

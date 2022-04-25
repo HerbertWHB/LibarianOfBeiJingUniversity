@@ -150,6 +150,7 @@ class Trainer(object):
                     accum += 1
                     if accum == self.grad_accum_count:
                         reduce_counter += 1
+                        # 多进程的时候分配用
                         if self.n_gpu > 1:
                             normalization = sum(distributed
                                                 .all_gather_list
@@ -271,6 +272,7 @@ class Trainer(object):
                 # Here labels are concatenated from the second token (the first cls token is not included).
                 # 这里的tgt是什么用的我没有看懂
                 batch.tgt = torch.cat((tgt, tgt_eng[:, 1:]), dim=1)
+                # 需不需要把他们拆开呢？
                 outputs = torch.cat((outputs, mono_outputs), dim=1)
             batch_stats = self.loss.sharded_compute_loss(
                 batch, outputs, self.args.generator_shard_size, normalization)

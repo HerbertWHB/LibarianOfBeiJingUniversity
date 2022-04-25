@@ -1,3 +1,97 @@
+
+# MCLAS模型优化尝试--汪浩博
+#### 摘要：
+
+​    时间：20220425
+​    平台：colab
+​    优化内容：models/loss.js
+​    优化逻辑：将mclas原有的loss和simcse模型的loss相加
+​    碰到的问题：在validate这一步发现tensor存在问题：一方面tensor数值发现全为0，另一方面出现掩码时掩码tesnor的size和需要掩码的矩阵size不符
+
+#### 详细介绍：
+
+####  1.优化平台和代码配置：
+
+​	代码均已经上传至colab，点击testConfig.ipynb,里面对应代码，按顺序点击以后即可运行。
+
+​	以下为运行步骤
+
+##### 	A.需要安装本地上传软件，同时登陆google drive
+
+​		1.安装云盘上传软件：
+
+​				https://support.google.com/a/answer/7491144?hl=zh-Hans#zippy=%2Cwindows
+
+​				![image-20220425154051769](README.assets/image-20220425154051769.png)
+
+​		2.谷歌账号&&密码： Jinxiang4405  &&  44054405zjx
+
+##### B.页面如下：
+
+进入testConfig.ipynb，则可以执行代码
+
+![image-20220425152833992](README.assets/image-20220425152833992.png)
+
+
+
+**C.代码执行界面**
+
+1.对应代码有什么用均写了注释，按顺序从上到下运行即可
+
+![image-20220425154702758](README.assets/image-20220425154702758.png)
+
+2.最后三行为程序运行命令，使用的命令在下方MCLAS的文档里面
+
+​	![image-20220425154910596](README.assets/image-20220425154910596.png)
+
+
+
+### 2.代码优化逻辑：
+
+当MCLAS模型的进行跨语言抽象摘要任务的时候，实现上先执行一次monolingual summarization(MS)任务，再执行一次 cross-lingual translation(CLS)任务。这意味着一份数据集，首先会成为源语言的摘要，再成为目标语言的摘要。
+
+而对于对比学习来说，需要两个本质上相同的正样本对和其他负样本。通过loss计算，让两个正样本足够近，并让正负样本足够远。
+
+结合的思路是将目标语言和源语言作为正样本对，正样本对离其他所有负样本(batch里的其他内容)足够远。
+
+如图（同时表明了代码里对应的参数）：
+
+![image-20220425155259512](README.assets/image-20220425155259512.png)
+
+##### A.数据查看
+
+​	在训练中，mono_output和output均有数值的情况需要在命令行中添加参数：--multi_task(可以在下方MCLAS文档里找到)
+
+​	（其中，mono_output，output数据可以在models/trainer.py 267行查看）
+
+##### B.主要修改内容
+
+​	models/loss.js 278行
+
+​	在计算loss时候，output和mono_output会在trainer.py 274行通过cat方法在dim=1合并成一个tensor。由于这两个tensor的size一摸一样。因此我的思路是到了计算loss的方法里面，再把这个合并的tensor从dim=1对半切片。切片完成后一般进行MCLAS自己的LOSS计算，另一半进行对比学习的计算
+
+​	![image-20220425155752012](README.assets/image-20220425155752012.png)
+
+### 3.碰到的问题：
+
+##### A.validate: tensor数据有误：
+
+​	再算完loss之后打印tensor发现数值正常，但是在validate阶段输入模型时候发现tensor为一排0
+
+​	(例如：tensor([0,0,0,0,0,0,0])）
+
+**B.validate: tensormask不匹配**：
+
+![image-20220425163743084](README.assets/image-20220425163743084.png)
+
+##### **C.torch版本难以降低：**
+
+​	为了dubug生了一次torch版本（1.10.0），后面发现可以使用，但是每次希望安装模型torch版本时候（1.1.0）都会说不匹配然后强制安装1.10.0
+
+
+
+
+
 # Multi-Task Framework for Cross-Lingual Abstractive Summarization (MCLAS)
 
 The code for ACL2021 paper Cross-Lingual Abstractive Summarization with Limited Parallel Resources ([Paper](https://arxiv.org/abs/2105.13648)).
