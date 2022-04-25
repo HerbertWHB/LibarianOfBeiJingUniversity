@@ -32,10 +32,12 @@ def _get_attn_subsequent_mask(size):
     subsequent_mask = torch.from_numpy(subsequent_mask)
     return subsequent_mask
 
-def build_predictor(args, tokenizer, symbols, model, logger=None):
-    scorer = GNMTGlobalScorer(args.alpha,length_penalty='wu')
 
-    translator = Translator(args, model, tokenizer, symbols, global_scorer=scorer, logger=logger)
+def build_predictor(args, tokenizer, symbols, model, logger=None):
+    scorer = GNMTGlobalScorer(args.alpha, length_penalty='wu')
+
+    translator = Translator(args, model, tokenizer,
+                            symbols, global_scorer=scorer, logger=logger)
     return translator
 
 
@@ -91,7 +93,8 @@ class Translator(object):
 
         tensorboard_log_dir = args.model_path
 
-        self.tensorboard_writer = SummaryWriter(tensorboard_log_dir, comment="Unmt")
+        self.tensorboard_writer = SummaryWriter(
+            tensorboard_log_dir, comment="Unmt")
 
         if self.beam_trace:
             self.beam_accum = {
@@ -112,7 +115,6 @@ class Translator(object):
         tokens = [t for t in tokens if t < len(self.vocab)]
         tokens = self.vocab.DecodeIds(tokens).split(' ')
         return tokens
-
 
     def split_2language_ids(self, ids):
         first_language_ids = []
@@ -135,14 +137,14 @@ class Translator(object):
         # print(second_language_ids)
         return first_language_ids, second_language_ids
 
-
     def from_batch(self, translation_batch):
         batch = translation_batch["batch"]
         assert (len(translation_batch["gold_score"]) ==
                 len(translation_batch["predictions"]))
         batch_size = batch.batch_size
 
-        preds, pred_score, gold_score, tgt_str, src =  translation_batch["predictions"],translation_batch["scores"],translation_batch["gold_score"],batch.tgt_str, batch.src
+        preds, pred_score, gold_score, tgt_str, src = translation_batch["predictions"], translation_batch[
+            "scores"], translation_batch["gold_score"], batch.tgt_str, batch.src
         # preds, pred_score, gold_score, tgt_str, src =  translation_batch["predictions"],translation_batch["scores"],translation_batch["gold_score"],batch.tgt_eng_str, batch.src
         tgt_eng_str = batch.tgt_eng_str
         if self.args.predict_first_language and self.args.multi_task:
@@ -160,9 +162,9 @@ class Translator(object):
             pred_ids = [int(n) for n in preds[b][0]]
             tgt_ids = [int(n) for n in tgt[b]]
             pred_sents_str = self.vocab.convert_ids_to_tokens(pred_ids)
-            pred_sents_str = ' '.join(pred_sents_str).replace(' ##','')
+            pred_sents_str = ' '.join(pred_sents_str).replace(' ##', '')
             gold_sents_str = self.vocab.convert_ids_to_tokens(tgt_ids)
-            gold_sents_str = ' '.join(gold_sents_str).replace(' ##','')
+            gold_sents_str = ' '.join(gold_sents_str).replace(' ##', '')
 
             if self.args.predict_2language:
                 # 这里是选择预测第一个language还是第二个language
@@ -174,13 +176,16 @@ class Translator(object):
                     _, pred_ids = self.split_2language_ids(pred_ids)
                     _, tgt_ids = self.split_2language_ids(tgt_ids)
 
-
             if self.args.predict_chinese:
                 # 得变成id再变回来
-                pred_str = ' '.join(self.vocab.convert_ids_to_tokens(pred_ids)).replace(' ##', '').replace('[unused2]', '').replace('[unused1]', '')
-                tgt_str = ' '.join(self.vocab.convert_ids_to_tokens(tgt_ids)).replace(' ##', '').replace('[unused2]', '').replace('[unused1]', '')
-                pred_tokens = self.vocab.tokenize(pred_str, tokenize_chinese_chars=False)
-                tgt_tokens = self.vocab.tokenize(tgt_str, tokenize_chinese_chars=False)
+                pred_str = ' '.join(self.vocab.convert_ids_to_tokens(pred_ids)).replace(
+                    ' ##', '').replace('[unused2]', '').replace('[unused1]', '')
+                tgt_str = ' '.join(self.vocab.convert_ids_to_tokens(tgt_ids)).replace(
+                    ' ##', '').replace('[unused2]', '').replace('[unused1]', '')
+                pred_tokens = self.vocab.tokenize(
+                    pred_str, tokenize_chinese_chars=False)
+                tgt_tokens = self.vocab.tokenize(
+                    tgt_str, tokenize_chinese_chars=False)
                 pred_ids = self.vocab.convert_tokens_to_ids(pred_tokens)
                 tgt_ids = self.vocab.convert_tokens_to_ids(tgt_tokens)
                 pred_sents = ' '.join(str(n) for n in pred_ids)
@@ -193,12 +198,6 @@ class Translator(object):
                 gold_sent = ' '.join(gold_sent).replace(' ##', '')
                 # gold_sent = ' '.join(tgt_str[b].split())
                 # gold_sent = ' '.join(tgt_str[b].split())
-
-
-
-
-
-
 
             # pred_sents = self.vocab.convert_ids_to_tokens([int(n) for n in preds[b][0]])
             # pred_sents = ' '.join(pred_sents).replace(' ##','')
@@ -213,14 +212,15 @@ class Translator(object):
             #                           gold_score[b])
             # src = self.spm.DecodeIds([int(t) for t in translation_batch['batch'].src[0][5] if int(t) != len(self.spm)])
 
-
             if self.args.bart:
                 raw_src = [self.vocab.decoder[int(t)] for t in src[b]][:500]
             else:
-                raw_src = [self.vocab.ids_to_tokens[int(t)] for t in src[b]][:500]
+                raw_src = [
+                    self.vocab.ids_to_tokens[int(t)] for t in src[b]][:500]
             raw_src = ' '.join(raw_src)
             # translation = (pred_sents, gold_sent, raw_src, pred_sents_str, gold_sents_str)
-            translation = (pred_sents, gold_sent, raw_src, pred_sents_str, gold_sents_str, gold_eng_sent)
+            translation = (pred_sents, gold_sent, raw_src,
+                           pred_sents_str, gold_sents_str, gold_eng_sent)
             # translation = (pred_sents[0], gold_sent)
             translations.append(translation)
 
@@ -250,7 +250,6 @@ class Translator(object):
         self.gold_str_out_file = codecs.open(gold_str_path, 'w', 'utf-8')
         self.can_str_out_file = codecs.open(can_str_path, 'w', 'utf-8')
 
-
         raw_src_path = self.args.result_path + '.%d.raw_src' % step
         self.src_out_file = codecs.open(raw_src_path, 'w', 'utf-8')
 
@@ -267,36 +266,40 @@ class Translator(object):
                 translations = self.from_batch(batch_data)
 
                 for trans in translations:
-                    print(time.asctime(time.localtime(time.time())), "----- now is the test sample: ", ct, end='\r')
+                    print(time.asctime(time.localtime(time.time())),
+                          "----- now is the test sample: ", ct, end='\r')
 
                     # pred, gold, src, pred_strrr, gold_strrr,  = trans
                     pred, gold, src, pred_strrr, gold_strrr, gold_eng = trans
                     if self.args.bart:
-                        pred_str = pred.replace('madeupword0000', '').replace('madeupword0001', '').replace('<pad>', '').replace('<unk>', '').replace(r' +', ' ').replace(' madeupword0002 ', '<q>').replace('madeupword0002', '').strip()
+                        pred_str = pred.replace('madeupword0000', '').replace('madeupword0001', '').replace('<pad>', '').replace(
+                            '<unk>', '').replace(r' +', ' ').replace(' madeupword0002 ', '<q>').replace('madeupword0002', '').strip()
 
                         # 这里由于target也是从id转过来的了，所以做了如下变换。
-                        gold_str = gold.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace('[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
+                        gold_str = gold.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace(
+                            '[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
                     else:
-                        pred_str = pred.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace('[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
+                        pred_str = pred.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace(
+                            '[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
 
                         # 这里由于target也是从id转过来的了，所以做了如下变换。
-                        gold_str = gold.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace('[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
+                        gold_str = gold.replace('[unused1]', '').replace('[unused4]', '').replace('[PAD]', '').replace(
+                            '[unused2]', '').replace(r' +', ' ').replace(' [unused3] ', '<q>').replace('[unused3]', '').strip()
                     # gold_str = gold.strip()
                     if(self.args.recall_eval):
                         _pred_str = ''
                         gap = 1e3
                         for sent in pred_str.split('<q>'):
-                            can_pred_str = _pred_str+ '<q>'+sent.strip()
-                            can_gap = math.fabs(len(_pred_str.split())-len(gold_str.split()))
+                            can_pred_str = _pred_str + '<q>'+sent.strip()
+                            can_gap = math.fabs(
+                                len(_pred_str.split())-len(gold_str.split()))
                             # if(can_gap>=gap):
-                            if(len(can_pred_str.split())>=len(gold_str.split())+10):
+                            if(len(can_pred_str.split()) >= len(gold_str.split())+10):
                                 pred_str = _pred_str
                                 break
                             else:
                                 gap = can_gap
                                 _pred_str = can_pred_str
-
-
 
                         # pred_str = ' '.join(pred_str.split()[:len(gold_str.split())])
                     # self.raw_can_out_file.write(' '.join(pred).strip() + '\n')
@@ -326,11 +329,15 @@ class Translator(object):
 
         if (step != -1):
             rouges = self._report_rouge(gold_path, can_path)
-            self.logger.info('Rouges at step %d \n%s' % (step, rouge_results_to_str(rouges)))
+            self.logger.info('Rouges at step %d \n%s' %
+                             (step, rouge_results_to_str(rouges)))
             if self.tensorboard_writer is not None:
-                self.tensorboard_writer.add_scalar('test/rouge1-F', rouges['rouge_1_f_score'], step)
-                self.tensorboard_writer.add_scalar('test/rouge2-F', rouges['rouge_2_f_score'], step)
-                self.tensorboard_writer.add_scalar('test/rougeL-F', rouges['rouge_l_f_score'], step)
+                self.tensorboard_writer.add_scalar(
+                    'test/rouge1-F', rouges['rouge_1_f_score'], step)
+                self.tensorboard_writer.add_scalar(
+                    'test/rouge2-F', rouges['rouge_2_f_score'], step)
+                self.tensorboard_writer.add_scalar(
+                    'test/rougeL-F', rouges['rouge_l_f_score'], step)
 
     def _report_rouge(self, gold_path, can_path):
         self.logger.info("Calculating Rouge")
@@ -380,16 +387,17 @@ class Translator(object):
         # print(batch.tgt)
         # exit()
 
-
         if self.args.bart:
-            src_features = self.model.bert.model.encoder(input_ids=src, attention_mask=mask_src)[0]
+            src_features = self.model.bert.model.encoder(
+                input_ids=src, attention_mask=mask_src)[0]
             # print("output = ", self.model。)
             # past_key_values =
             # print("src_features = ", src_features.size())
             # print(src_features)
         else:
             src_features = self.model.bert(src, segs, mask_src)
-        dec_states = self.model.decoder.init_decoder_state(src, src_features, with_cache=True)
+        dec_states = self.model.decoder.init_decoder_state(
+            src, src_features, with_cache=True)
         device = src_features.device
 
         # Tile states and memory beam_size times.
@@ -420,7 +428,8 @@ class Translator(object):
             device=device)
 
         if self.args.language_limit:
-            language_limit = torch.Tensor(json.load(open(self.args.tgt_mask))).long().cuda()
+            language_limit = torch.Tensor(
+                json.load(open(self.args.tgt_mask))).long().cuda()
 
         # language_seg
         language_segs = torch.full(
@@ -428,7 +437,6 @@ class Translator(object):
             0,
             dtype=torch.long,
             device=device)
-
 
         # Give full probability to the first beam on the first step.
         topk_log_probs = (
@@ -444,7 +452,6 @@ class Translator(object):
         results["gold_score"] = [0] * batch_size
         results["batch"] = batch
 
-
         for step in range(max_length):
             # print("alive_seq = ", alive_seq.size())
             # print(alive_seq)
@@ -452,32 +459,31 @@ class Translator(object):
             # print(language_segs)
             decoder_input = alive_seq[:, -1].view(1, -1)
 
-
             # language_seg和alive_seq始终保持一致，alive_seq ，language也选择。
             # 选择完之后，看这次的token是否为5，做一个01矩阵，新的language直接等于1的位置取反，那就取反
             # 先给取反的位置赋0，（算取反向量，乘以01矩阵）加到原有的上边即可。
             # 最后concat到一起
-            decoder_seg_input = language_segs[:, -1].view(1,-1)
+            decoder_seg_input = language_segs[:, -1].view(1, -1)
 
             # Decoder forward.
-            decoder_input = decoder_input.transpose(0,1)
+            decoder_input = decoder_input.transpose(0, 1)
 
-
-            decoder_seg_input = decoder_seg_input.transpose(0,1)
-
+            decoder_seg_input = decoder_seg_input.transpose(0, 1)
 
             if self.args.bart:
                 tgt_mask = torch.zeros(decoder_input.size()).byte().cuda()
 
                 # causal_mask = (1 - _get_attn_subsequent_mask(tgt_mask.size(1)).float().cuda()) # * float("-inf")).cuda()
-                causal_mask = torch.triu(torch.zeros(tgt_mask.size(1), tgt_mask.size(1)).float().fill_(float("-inf")).float(), 1).cuda()
+                causal_mask = torch.triu(torch.zeros(tgt_mask.size(1), tgt_mask.size(
+                    1)).float().fill_(float("-inf")).float(), 1).cuda()
                 # print(src_features.size())
                 # print(mask_src.size())
                 # print(mask_src)
                 # model_inputs = self.bert.model.prepare_inputs_for_generation(
                 #     decoder_input, past=src_features, attention_mask=tgt_mask, use_cache=True
                 # )
-                dec_output = self.model.bert.model.decoder(input_ids=alive_seq, encoder_hidden_states=src_features, encoder_padding_mask=mask_src, decoder_padding_mask=tgt_mask, decoder_causal_mask=causal_mask, decoder_cached_states=bart_dec_cache, use_cache=True)
+                dec_output = self.model.bert.model.decoder(input_ids=alive_seq, encoder_hidden_states=src_features, encoder_padding_mask=mask_src,
+                                                           decoder_padding_mask=tgt_mask, decoder_causal_mask=causal_mask, decoder_cached_states=bart_dec_cache, use_cache=True)
                 dec_out = dec_output[0]
                 bart_dec_cache = dec_output[1][1]
                 # print(bart_dec_cache)
@@ -486,35 +492,34 @@ class Translator(object):
                 # exit()
             elif self.args.predict_first_language and self.args.multi_task:
                 dec_out, dec_states = self.model.decoder_monolingual(decoder_input, src_features, dec_states,
-                                                         step=step, tgt_segs=decoder_seg_input)
+                                                                     step=step, tgt_segs=decoder_seg_input)
             else:
                 dec_out, dec_states = self.model.decoder(decoder_input, src_features, dec_states,
                                                          step=step, tgt_segs=decoder_seg_input)
 
-
             # Generator forward.
-            log_probs = self.generator.forward(dec_out.transpose(0,1).squeeze(0))
+            log_probs = self.generator.forward(
+                dec_out.transpose(0, 1).squeeze(0))
             vocab_size = log_probs.size(-1)
 
             if self.args.language_limit:
-
 
                 mask_language_limit = torch.zeros(log_probs.size()).cuda()
                 mask_language_limit.index_fill_(1, language_limit, 1)
                 # 如果两个语言拼接，那么生成第二语言才限制 如果是直接跨语言的话，那从最开始就要限制
                 if self.args.predict_2language:
                     mask_language_limit = mask_language_limit.long() * decoder_seg_input
-                    mask_language_limit = mask_language_limit + (1 - decoder_seg_input)
+                    mask_language_limit = mask_language_limit + \
+                        (1 - decoder_seg_input)
                 else:
-                    mask_language_limit = mask_language_limit.long() * torch.ones(decoder_seg_input.size()).long().cuda()
+                    mask_language_limit = mask_language_limit.long(
+                    ) * torch.ones(decoder_seg_input.size()).long().cuda()
 
                 # 这里，把除了备选位置的都赋为负无穷
                 log_probs.masked_fill_((1 - mask_language_limit).byte(), -1e20)
 
-
             if step < min_length:
                 log_probs[:, self.end_token] = -1e20
-
 
             # Multiply probs by the beam probability.
             log_probs += topk_log_probs.view(-1).unsqueeze(1)
@@ -527,18 +532,20 @@ class Translator(object):
 
             if(self.args.block_trigram):
                 cur_len = alive_seq.size(1)
-                if(cur_len>3):
+                if(cur_len > 3):
                     for i in range(alive_seq.size(0)):
                         fail = False
                         words = [int(w) for w in alive_seq[i]]
                         if self.args.bart:
                             words = [self.vocab.decoder[w] for w in words]
                         else:
-                            words = [self.vocab.ids_to_tokens[w] for w in words]
-                        words = ' '.join(words).replace(' ##','').split()
-                        if(len(words)<=3):
+                            words = [self.vocab.ids_to_tokens[w]
+                                     for w in words]
+                        words = ' '.join(words).replace(' ##', '').split()
+                        if(len(words) <= 3):
                             continue
-                        trigrams = [(words[i-1],words[i],words[i+1]) for i in range(1,len(words)-1)]
+                        trigrams = [(words[i-1], words[i], words[i+1])
+                                    for i in range(1, len(words)-1)]
                         trigram = tuple(trigrams[-1])
                         if trigram in trigrams[:-1]:
                             fail = True
@@ -557,10 +564,9 @@ class Translator(object):
 
             # Map beam_index to batch_index in the flat representation.
             batch_index = (
-                    topk_beam_index
-                    + beam_offset[:topk_beam_index.size(0)].unsqueeze(1))
+                topk_beam_index
+                + beam_offset[:topk_beam_index.size(0)].unsqueeze(1))
             select_indices = batch_index.view(-1)
-
 
             # Append last prediction.
             alive_seq = torch.cat(
@@ -579,12 +585,11 @@ class Translator(object):
             is_languaged = topk_ids.eq(5)
             # is_languaged = alive_seq[:, -2].unsqueeze(0).eq(5)
             language_segs = language_segs.index_select(0, select_indices)
-
             last_segs = language_segs[:, -1]
+            if step == 10:
+                breakpoint()
             tmp_seg = last_segs.masked_fill(is_languaged, 1)
-            language_segs = torch.cat([language_segs, tmp_seg.view(-1,1)], -1)
-
-
+            language_segs = torch.cat([language_segs, tmp_seg.view(-1, 1)], -1)
 
             # print("is_finished = ", is_finished)
             if step + 1 == max_length:

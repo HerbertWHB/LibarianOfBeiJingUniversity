@@ -197,7 +197,7 @@ class monoLabelSmoothingLoss(nn.Module):
     """
 
     def __init__(self, label_smoothing, tgt_vocab_size, ignore_index=-100):
-        assert 0.0 < label_smoothing <= 1.0
+        # assert 0.0 < label_smoothing <= 1.0
         self.padding_idx = ignore_index
         super(monoLabelSmoothingLoss, self).__init__()
 
@@ -221,12 +221,6 @@ class monoLabelSmoothingLoss(nn.Module):
         cos_sim = sim(output.unsqueeze(1), mono_outputs.unsqueeze(0))
 
         labels = torch.arange(cos_sim.size(0)).long().to('cuda:0')
-
-        # 升+看数据
-        # input 看看有没有diff
-        # print('---------------------------\n')
-        # print('output.unseq(1)=%s\n', output.unsqueeze(1))
-        # print('---------------------------\n')
 
         # parmas  input target
         loss_fct = nn.CrossEntropyLoss()
@@ -268,6 +262,9 @@ class NMTLossCompute(LossComputeBase):
             self.criterion = nn.NLLLoss(
                 ignore_index=self.padding_idx, reduction='sum'
             )
+            self.monocriterion = monoLabelSmoothingLoss(
+                label_smoothing, vocab_size, ignore_index=self.padding_idx
+            )
 
     def _make_shard_state(self, batch, output):
         return {
@@ -276,7 +273,9 @@ class NMTLossCompute(LossComputeBase):
         }
 
     def _compute_loss(self, batch, output, target):
+        # output的size整除2
         index = output.size(1)//2
+
         mono_output = output[:, index:, :]
         monoTarget = target[:, index:]
 
@@ -299,10 +298,13 @@ class NMTLossCompute(LossComputeBase):
 
         loss = contractive_loss+loss
         stats = self._stats(loss.clone(), scores, gtruth)
-        print('---')
-        print(stats)
-        print('---')
-        breakpoint()
+
+        # print('---loss---')
+        # print(loss)
+        # print('------')
+        # print(stats)
+        # print('---stats---')
+
         return loss, stats
 
 
